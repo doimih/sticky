@@ -1,0 +1,27 @@
+services:
+  sticky:
+    container_name: sticky_frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_APP_BASE_PATH: ${VITE_APP_BASE_PATH:-/sticky/}
+    restart: unless-stopped
+    networks:
+      - shop-online_web
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=shop-online_web
+      - traefik.http.routers.sticky.rule=Host(`${TRAEFIK_HOST:-projects.doimih.net}`) && PathPrefix(`${TRAEFIK_PATH_PREFIX:-/sticky}`)
+      - traefik.http.routers.sticky.entrypoints=websecure
+      - traefik.http.routers.sticky.tls.certresolver=letsencrypt
+      - traefik.http.routers.sticky.priority=70
+      - traefik.http.routers.sticky.middlewares=sticky-strip@docker
+      - traefik.http.middlewares.sticky-strip.stripprefix.prefixes=${TRAEFIK_PATH_PREFIX:-/sticky}
+      - traefik.http.services.sticky.loadbalancer.server.port=80
+
+networks:
+  shop-online_web:
+    external: true
