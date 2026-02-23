@@ -1,15 +1,6 @@
-# React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
 # Sticky
 
-Cross-platform sticky-notes and idea-management app (React + Vite + Zustand + Dexie + Supabase + Konva + PWA).
+Cross-platform sticky-notes and idea-management app built with React, Vite, Zustand, Dexie, Supabase, Konva and PWA support.
 
 ## Local development
 
@@ -26,40 +17,47 @@ npm run build
 
 ## Deploy behind existing Traefik (isolated)
 
-This project ships with a standalone compose file that only starts `sticky` and joins the existing Traefik docker network.
+This repository includes `docker-compose.traefik.yml`, which starts only the Sticky frontend and attaches it to the existing Traefik network.
 
-1) Create environment file:
+1. Create env file:
 
 ```bash
 cp .env.traefik.example .env.traefik
 ```
 
-2) Edit `.env.traefik` values (Supabase + route).
+2. Configure `.env.traefik` values (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, route settings).
 
-3) Validate compose:
+3. Validate compose:
 
 ```bash
 docker compose --env-file .env.traefik -f docker-compose.traefik.yml config
 ```
 
-4) Start/Update only Sticky:
+4. Start/update Sticky:
 
 ```bash
 docker compose --env-file .env.traefik -f docker-compose.traefik.yml up -d --build
 ```
 
-5) URL (default):
+5. Default app URL:
 
 `https://projects.doimih.net/sticky`
 
-No existing project stacks are modified by this deployment.
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Monitoring API
+
+- Public route: `https://projects.doimih.net/sticky/api/health`
+- Backend route inside container: `/api/health`
+- Method: `GET`
+- Response: JSON
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "service": "sticky",
+  "timestamp": "2026-02-23T12:34:56+00:00"
+}
 ```
+
+Access is restricted to requests with `Origin: https://projects.doimih.net`.
