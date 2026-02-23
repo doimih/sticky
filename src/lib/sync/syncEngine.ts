@@ -1,12 +1,19 @@
 import { db } from '../db/appDb'
 import { supabaseApi } from '../api/supabaseApi'
+import { isSupabaseConfigured } from '../supabase/client'
 import type { Connection, Note, Project, SyncQueueItem } from '../../types/domain'
+
+let flushPromise: Promise<void> | null = null
 
 export const enqueueSync = async (item: Omit<SyncQueueItem, 'id' | 'createdAt'>): Promise<void> => {
   await db.syncQueue.add({
     ...item,
     createdAt: new Date().toISOString(),
   })
+
+  if (navigator.onLine && isSupabaseConfigured) {
+    void flushSyncQueue()
+  }
 }
 
 const processQueueItem = async (item: SyncQueueItem): Promise<void> => {
@@ -36,18 +43,37 @@ const processQueueItem = async (item: SyncQueueItem): Promise<void> => {
 }
 
 export const flushSyncQueue = async (): Promise<void> => {
-  if (!navigator.onLine) return
+  if (!navigator.onLine || !isSupabaseConfigured) return
 
-  const items = await db.syncQueue.orderBy('createdAt').toArray()
-  for (const item of items) {
-    try {
-      await processQueueItem(item)
-      if (item.id) {
-        await db.syncQueue.delete(item.id)
+  if (flushPromise) {
+    await flushPromise
+    return
+  }
+
+  flushPromise = (async () => {
+    const items = await db.syncQueue.orderBy('createdAt').toArray()
+    for (const item of items) {
+      try {
+        await processQueueItem(item)
+        if (item.id) {
+          await db.syncQueue.delete(item.id)
+        }
+      } catch (error) {
+        console.error('[sync] Queue flush failed; will retry later.', {
+          entity: item.entity,
+          action: item.action,
+          id: item.id,
+          error,
+        })
+        break
       }
-    } catch {
-      break
     }
+  })()
+
+  try {
+    await flushPromise
+  } finally {
+    flushPromise = null
   }
 }
 
@@ -56,8 +82,20 @@ export const setupAutoSync = (): (() => void) => {
     void flushSyncQueue()
   }
 
+  const visibilityHandler = () => {
+    if (document.visibilityState === 'visible') {
+      handler()
+    }
+  }
+
   window.addEventListener('online', handler)
+  window.addEventListener('focus', handler)
+  document.addEventListener('visibilitychange', visibilityHandler)
   void flushSyncQueue()
 
-  return () => window.removeEventListener('online', handler)
+  return () => {
+    window.removeEventListener('online', handler)
+    window.removeEventListener('focus', handler)
+    document.removeEventListener('visibilitychange', visibilityHandler)
+  }
 }

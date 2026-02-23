@@ -17,6 +17,7 @@ interface BoardState {
   setSearchQuery: (query: string) => void
   createNote: (projectId: string, userId: string) => Promise<void>
   updateNotePosition: (noteId: string, x: number, y: number) => Promise<void>
+  moveNoteToVisibleArea: (noteId: string) => Promise<void>
   updateNoteContent: (noteId: string, patch: Partial<Pick<Note, 'title' | 'content' | 'tags' | 'color'>>) => Promise<void>
   deleteNote: (noteId: string) => Promise<void>
   createConnection: (projectId: string, noteIdFrom: string, noteIdTo: string) => Promise<void>
@@ -133,10 +134,28 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const note = get().notes.find((item) => item.id === noteId)
     if (!note) return
 
-    const next: Note = { ...note, posX: x, posY: y, updatedAt: nowIso() }
+    const next: Note = { ...note, posX: Math.max(0, x), posY: Math.max(0, y), updatedAt: nowIso() }
     await db.notes.put(next)
     await enqueueSync({ entity: 'notes', action: 'upsert', payload: next })
 
+    set((state) => ({
+      notes: state.notes.map((item) => (item.id === noteId ? next : item)),
+    }))
+  },
+
+  moveNoteToVisibleArea: async (noteId) => {
+    const note = get().notes.find((item) => item.id === noteId)
+    if (!note) return
+
+    const next: Note = {
+      ...note,
+      posX: 140,
+      posY: 140,
+      updatedAt: nowIso(),
+    }
+
+    await db.notes.put(next)
+    await enqueueSync({ entity: 'notes', action: 'upsert', payload: next })
     set((state) => ({
       notes: state.notes.map((item) => (item.id === noteId ? next : item)),
     }))

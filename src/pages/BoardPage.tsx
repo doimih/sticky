@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { BoardCanvas } from '../components/canvas/BoardCanvas'
 import { useBoardBootstrap } from '../hooks/useBoardBootstrap'
 import { useRealtimeSync } from '../hooks/useRealtimeSync'
+import { isSupabaseConfigured } from '../lib/supabase/client'
 import { useAuthStore } from '../store/useAuthStore'
 import { useBoardStore } from '../store/useBoardStore'
 import { useProjectStore } from '../store/useProjectStore'
@@ -35,8 +36,10 @@ export function BoardPage() {
   const setSearchQuery = useBoardStore((state) => state.setSearchQuery)
   const createNote = useBoardStore((state) => state.createNote)
   const updateNotePosition = useBoardStore((state) => state.updateNotePosition)
+  const moveNoteToVisibleArea = useBoardStore((state) => state.moveNoteToVisibleArea)
   const updateNoteContent = useBoardStore((state) => state.updateNoteContent)
   const createConnection = useBoardStore((state) => state.createConnection)
+  const deleteConnection = useBoardStore((state) => state.deleteConnection)
 
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
 
@@ -53,6 +56,20 @@ export function BoardPage() {
   }, [notes, searchQuery])
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null
+  const colorOptions = ['#fef08a', '#fecaca', '#bfdbfe', '#bbf7d0', '#e9d5ff', '#fdba74']
+
+  const relatedConnections = useMemo(() => {
+    if (!selectedNote) return []
+    return connections.filter((connection) => connection.noteIdFrom === selectedNote.id || connection.noteIdTo === selectedNote.id)
+  }, [connections, selectedNote])
+
+  const noteTitleById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const note of notes) {
+      map.set(note.id, note.title || 'Untitled')
+    }
+    return map
+  }, [notes])
 
   if (loading) {
     return <section className="grid h-full place-items-center text-sm text-slate-400">Loading session...</section>
@@ -114,6 +131,12 @@ export function BoardPage() {
     <section className="flex h-full w-full flex-col">
       <header className="flex h-16 items-center gap-3 border-b border-slate-800 bg-slate-900 px-4">
         <h1 className="text-lg font-semibold">Sticky Board</h1>
+
+        {!isSupabaseConfigured && (
+          <p className="rounded-md border border-amber-500/60 bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
+            Cloud sync is OFF (missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
+          </p>
+        )}
 
         <select
           className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm"
@@ -228,18 +251,47 @@ export function BoardPage() {
             notes={filteredNotes}
             connections={connections}
             onNoteDragEnd={(noteId, x, y) => {
-              setSelectedNoteId(noteId)
               void updateNotePosition(noteId, x, y)
             }}
           />
         </div>
 
-        <aside className="h-full w-80 border-l border-slate-800 bg-slate-900 p-4">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Note Editor</h2>
-          {!selectedNote && <p className="text-sm text-slate-500">Select or drag a note to edit.</p>}
+        <aside className="flex h-full w-80 flex-col border-l border-slate-800 bg-slate-900 p-4">
+          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">Notes</h2>
+          {notes.length === 0 && <p className="text-sm text-slate-500">No notes yet in this project.</p>}
+
+          {notes.length > 0 && (
+            <div className="mb-4 max-h-52 space-y-1 overflow-y-auto pr-1">
+              {notes.map((note) => (
+                <button
+                  key={note.id}
+                  className={`w-full truncate rounded-md px-2 py-1.5 text-left text-sm ${
+                    selectedNoteId === note.id
+                      ? 'border border-blue-500 bg-blue-600/20 text-blue-200'
+                      : 'border border-transparent bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                  onClick={() => setSelectedNoteId(note.id)}
+                >
+                  {note.title || 'Untitled'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Note Editor</h3>
+          {!selectedNote && <p className="text-sm text-slate-500">Click a note name from the list to open editor.</p>}
 
           {selectedNote && (
             <div className="space-y-3">
+              <p className="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-xs text-blue-200">
+                Selected: {selectedNote.title || 'Untitled'}
+              </p>
+              <button
+                className="rounded-md bg-slate-700 px-3 py-1.5 text-sm font-medium hover:bg-slate-600"
+                onClick={() => void moveNoteToVisibleArea(selectedNote.id)}
+              >
+                Bring to view
+              </button>
               <input
                 className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm outline-none"
                 value={selectedNote.title}
@@ -265,6 +317,36 @@ export function BoardPage() {
                   })
                 }
               />
+
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Color</p>
+                <div className="flex gap-2">
+                  {colorOptions.map((color) => (
+                    <button
+                      key={color}
+                      className={`h-7 w-7 rounded-full border-2 ${selectedNote.color === color ? 'border-white' : 'border-slate-600'}`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => void updateNoteContent(selectedNote.id, { color })}
+                      title={`Set color ${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Connections</p>
+                {relatedConnections.length === 0 && <p className="text-sm text-slate-500">No connections for this note.</p>}
+                {relatedConnections.map((connection) => (
+                  <div key={connection.id} className="flex items-center justify-between rounded-md bg-slate-800 px-2 py-1.5 text-xs text-slate-300">
+                    <span className="truncate pr-2">
+                      {noteTitleById.get(connection.noteIdFrom)} → {noteTitleById.get(connection.noteIdTo)}
+                    </span>
+                    <button className="rounded bg-rose-600 px-2 py-0.5 text-white hover:bg-rose-500" onClick={() => void deleteConnection(connection.id)}>
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </aside>
