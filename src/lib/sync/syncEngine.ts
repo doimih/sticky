@@ -91,11 +91,13 @@ export const setupAutoSync = (): (() => void) => {
   window.addEventListener('online', handler)
   window.addEventListener('focus', handler)
   document.addEventListener('visibilitychange', visibilityHandler)
+  const intervalId = window.setInterval(handler, 30_000)
   void flushSyncQueue()
 
   return () => {
     window.removeEventListener('online', handler)
     window.removeEventListener('focus', handler)
     document.removeEventListener('visibilitychange', visibilityHandler)
+    window.clearInterval(intervalId)
   }
 }

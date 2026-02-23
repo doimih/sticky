@@ -132,6 +132,8 @@ export function BoardPage() {
       <header className="flex h-16 items-center gap-3 border-b border-slate-800 bg-slate-900 px-4">
         <h1 className="text-lg font-semibold">Sticky Board</h1>
 
+        <p className="text-xs text-slate-400">Cross-device sync works when you sign in with the same account.</p>
+
         {!isSupabaseConfigured && (
           <p className="rounded-md border border-amber-500/60 bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
             Cloud sync is OFF (missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
